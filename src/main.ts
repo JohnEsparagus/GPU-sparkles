@@ -37,10 +37,36 @@ async function init() {
         size: BUFFER_SIZE,
         usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     });
+
+    let colorTexture = context.getCurrentTexture();
+    let colorTextureView = colorTexture.createView();
+
+    let colorAttachment: GPURenderPassColorAttachment = {
+        clearValue: {r:1,g:0,b:0,a:1},
+        loadOp: 'clear',
+        storeOp: 'store',
+        view: colorTextureView
+    };
+    const renderPassDesc = {
+        colorAttachments:[colorAttachment]
+    };
+
+    const commandEncoder = device.createCommandEncoder();
+    // render pass 
+    const passEncoder = commandEncoder.beginRenderPass(renderPassDesc);
+    
+    passEncoder.setViewport(0, 0, canvas.width, canvas.height, 0, 1);
+
+    passEncoder.end();
+    device.queue.submit([commandEncoder.finish()]);
+}
+
+function render(){
+
 }
 
 async function shaderinit(device: GPUDevice){ 
-    const shaderModule = device.createShaderModule({});
+    //const shaderModule = device.createShaderModule({});
 }
 
 init();
