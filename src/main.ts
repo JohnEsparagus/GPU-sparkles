@@ -97,9 +97,10 @@ class Renderer {
             particleData.set([
                 Math.random()*2 - 1,Math.random()*2 - 1,
                 scale,scale,
-                Math.random(), Math.random(),Math.random(),Math.random(),
+                Math.random(), Math.random(),Math.random(),1.0,
                 INITIAL_LIFE*Math.random(),
-                0,0,0], offset);
+                0.0,
+            ], offset);
         }
         
         particleBuffer = device.createBuffer({
@@ -126,7 +127,13 @@ class Renderer {
             shaderLocation:3, offset:16, format:'float32x4' //color
         },
         {
-            shaderLocation:4, offset:32, format:'float32' //life
+            shaderLocation:4, offset:32, format:'float32' //velocity
+        },
+        {
+            shaderLocation:5, offset:40, format:'float32' //life
+        },
+        {
+            shaderLocation:6, offset:44, format:'float32' //grav
         },
 
        ],
@@ -207,10 +214,18 @@ class Renderer {
                 shaderLocation:3, //color
                 offset:16,
                 format:"float32x4"
+            },            {
+                shaderLocation:4, //velocity
+                offset:32,
+                format:"float32x2"
+            },            {
+                shaderLocation:5, //life
+                offset:40,
+                format:"float32"
             },
             {
-                shaderLocation:4, //life
-                offset:32,
+                shaderLocation:6, //gravity
+                offset:44,
                 format:"float32"
             },
         ],

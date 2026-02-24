@@ -9,7 +9,10 @@ struct Vertex {
     @location(1) particlePos: vec2<f32>,
     @location(2) scale: vec2<f32>,
     @location(3) color: vec4<f32>,
-    @location(4) life: f32,
+    @location(4) velocity: vec2<f32>,
+    @location(5) life: f32,
+    @location(6) gravity: f32,
+
 };
 
 struct Uniforms{
@@ -33,7 +36,5 @@ fn vert_main(vert:Vertex) -> VertexOut{
 
 @fragment
 fn frag_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let t = 1.0 - (in.life/5.0); // as life goes down t goes up
-    let finalRGB = mix(in.color.rgb, vec3(1.0,0.0,0.0), t); //mixing more ofter time to red
-    return vec4(finalRGB, in.color.a);
+    return  in.color;
 }
