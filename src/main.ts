@@ -1,20 +1,24 @@
 const BUFFER_SIZE = 10000;
 const GRID_SIZE = 4;
-const INITIAL_LIFE = 5;
+const INITIAL_LIFE = 2;
 const GROWTH_AMOUNT = 0.05;
 
 let device: GPUDevice ;
 let context: GPUCanvasContext | null;
 let renderPipeline: GPURenderPipeline | null;
+let computePipeline : GPUComputePipeline | null;
 let vertexBuffer: GPUBuffer ;
-let staticVertexBuffer: GPUBuffer ;
-let variableVertexBuffer: GPUBuffer ;
+let particleBuffer : GPUBuffer;
+let particleVertexLayout : GPUVertexBufferLayout;
 let adapter :GPUAdapter | null;
-
+const infoElem = document.querySelector('#info');
+let simParamBuffer: GPUBuffer;
 let aspectBuffer: GPUBuffer ;
 let bindGroup: GPUBindGroup | null;
 let computeBindGroup: GPUBindGroup | null;
+let bindGroupLayout: GPUBindGroupLayout | null;
 let canvas:HTMLCanvasElement;
+let computeBindGroupLayout: GPUBindGroupLayout;
 let time = 0;
 let start = performance.now();
 let  vertices = new Float32Array([
@@ -28,10 +32,12 @@ let  vertices = new Float32Array([
 
 
 let scale = 0.01;
-let kNumObjects = 3000;
-let staticData : Float32Array<ArrayBuffer>;
-let dynamicData : Float32Array<ArrayBuffer>;
+let kNumObjects = 2000;
+let particleData : Float32Array<ArrayBuffer>;
+
+
 let lastFrameTime = performance.now();
+
 
 class Renderer { 
     constructor(){};
@@ -55,7 +61,7 @@ class Renderer {
         }
 
         canvas = document.querySelector("canvas");
-        if (!canvas) {
+        if (!canvas || canvas == null) {
             throw new Error("Canvas elment not found in dom")
         }
         context = canvas.getContext("webgpu");
@@ -83,76 +89,130 @@ class Renderer {
 
     initBuffers() {
         
-        staticData = new Float32Array(kNumObjects * 6);
-        dynamicData = new Float32Array(kNumObjects * 3);
+        const particleStride = 48; //2 * 4, 2*4, 4*4 + 4 + 4 pos scale col life pad
+        particleData = new Float32Array(kNumObjects*(particleStride/4));
 
         for (let i = 0; i < kNumObjects; i++) {
-            staticData.set([Math.random(), Math.random(), Math.random(), 1, (Math.random()*2)-1, (Math.random()*2)-1], i*6);
-            dynamicData.set([(0.5 + Math.random()*0.5)*scale, (0.5 + Math.random()*0.5)*scale, (0.5+ Math.random()*0.5)*INITIAL_LIFE], i*3);
+            const offset = i * (particleStride/4);
+            particleData.set([
+                Math.random()*2 - 1,Math.random()*2 - 1,
+                scale,scale,
+                Math.random(), Math.random(),Math.random(),Math.random(),
+                INITIAL_LIFE*Math.random(),
+                0,0,0], offset);
         }
-
-
-        vertexBuffer = device.createBuffer({
-            size: vertices.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        });
-        device.queue.writeBuffer(vertexBuffer, 0 , vertices);
-
-        const staticUnitSize = 2*4 + 4*4; //this is padding for scale + 2*4;
-        const changingUnitSize = 2*4 + 4;
-
-        staticVertexBuffer = device.createBuffer({
-            size: staticUnitSize * kNumObjects,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        });
-        device.queue.writeBuffer(staticVertexBuffer, 0, staticData)
-        variableVertexBuffer = device.createBuffer({
-            size: changingUnitSize * kNumObjects,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        });
-        device.queue.writeBuffer(variableVertexBuffer, 0, dynamicData);
-
         
-    }
-    async  initPipelines(){
-            const vertexBufferLayout: GPUVertexBufferLayout[] = [
+        particleBuffer = device.createBuffer({
+            size: particleData.byteLength,
+            usage:
+            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+        });
+        
+        device.queue.writeBuffer(particleBuffer,  0, particleData);
+
+
+       particleVertexLayout = {
+       arrayStride: particleStride,
+       stepMode: "instance",
+       attributes: [
         {
-            arrayStride: 2*4,  //doesnt update much, we have 6 vertices so 2 floats each, 12 floats so  2 floats is 8 bytes each
-            attributes: [
-            {
-                shaderLocation: 0, 
-                offset: 0,
-                format: "float32x2" ,
-            },],
+            shaderLocation:1, offset:0, format:'float32x2' //pos
         },
         {
-            arrayStride: 6 * 4,
-            stepMode: 'instance',
-            attributes:[{
-                shaderLocation:1,   //updates sometimes
-                offset: 0,
-                format: "float32x4"
+            shaderLocation:2, offset:8, format:'float32x2' //scale
+
+        },
+        {
+            shaderLocation:3, offset:16, format:'float32x4' //color
+        },
+        {
+            shaderLocation:4, offset:32, format:'float32' //life
+        },
+
+       ],
+       } 
+        
+        simParamBuffer = device.createBuffer({
+            size:16,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM
+        });
+
+        vertexBuffer = device.createBuffer({
+            size:vertices.byteLength,
+            usage: GPUBufferUsage.VERTEX,
+            mappedAtCreation: true,
+        });
+        new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+        vertexBuffer.unmap();
+    }
+    async  initPipelines(){
+
+        computeBindGroupLayout = device.createBindGroupLayout({
+            entries:[{
+                binding:0,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {type:"storage"},
             },
             {
-                shaderLocation:2,
-                offset: 16,
-                format: "float32x2"
+                binding:1,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {type:"uniform"},
             },
+        ],
+        });
+
+            const computeShadername = await fetch("./shaders/compute.wgsl").then(r=>r.text());
+        const computeShaderModule  : GPUShaderModule = device.createShaderModule({
+            code: computeShadername
+        });
+        if (computeShaderModule){
+            console.log("ShaderModule successful initialisation");
+        }
+        computePipeline = device.createComputePipeline({
+            layout: device.createPipelineLayout({
+                bindGroupLayouts:[computeBindGroupLayout],
+            }),
+            compute:{
+                module: computeShaderModule,
+                entryPoint:"main",
+            }
+        })
+
+            const vertexBufferLayout: GPUVertexBufferLayout[] = [
+        {
+            arrayStride: 8,
+            stepMode: 'vertex',
+            attributes:[
+                {
+                    shaderLocation:0,
+                    offset:0,
+                    format:"float32x2",
+                }
             ],
         },
         {
-            arrayStride: 3 * 4,
-            stepMode: 'instance',   //always updating lowkey
+            arrayStride: 48, //particle stride
+            stepMode: 'instance',   
             attributes:[{
-                shaderLocation:3,
+                shaderLocation:1, //pos
                 offset:0,
                 format:"float32x2"
             },
             {
-                shaderLocation: 4,
-                offset: 8,
+                shaderLocation:2, //scale
+                offset:8,
+                format:"float32x2"
+            },
+            {
+                shaderLocation:3, //color
+                offset:16,
+                format:"float32x4"
+            },
+            {
+                shaderLocation:4, //life
+                offset:32,
                 format:"float32"
-            }
+            },
         ],
         },];
         const shadername = await fetch("./shaders/vert.wgsl").then(r=>r.text());
@@ -185,7 +245,6 @@ class Renderer {
             },
         };    
         renderPipeline = device.createRenderPipeline(pipelineDescriptor);
-        
 
     }
 
@@ -196,7 +255,7 @@ class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
         device.queue.writeBuffer(aspectBuffer, 0, new Float32Array([aspect,time,0,0]));
-        const bindGroupLayout : GPUBindGroupLayout = renderPipeline.getBindGroupLayout(0);
+        const bindGroupLayout : GPUBindGroupLayout = renderPipeline?.getBindGroupLayout(0);
         bindGroup = device.createBindGroup({
             layout: bindGroupLayout,
             entries:[{
@@ -206,6 +265,21 @@ class Renderer {
                 },
             },],
         });
+
+
+        computeBindGroup = device.createBindGroup({
+            layout: computeBindGroupLayout,
+            entries: [{
+                binding: 0,
+                resource: { buffer: particleBuffer } // No 'visibility' property inside createBindGroup
+            },
+            {
+                binding:1,
+                resource: {buffer:simParamBuffer}
+            }
+            ],
+        });
+        
     }
      resizeCanvas(canvas:HTMLCanvasElement){
         const displayWidth = canvas.clientWidth;
@@ -228,32 +302,14 @@ class Renderer {
         const dt = (now - lastFrameTime)/ 1000
         lastFrameTime = now;
 
+            infoElem.textContent = `\
+fps: ${(1 / dt).toFixed(1)}
+time: ${time.toFixed(1)}s
+`;
         if (!device) return;
         if (!context) return;
         device.queue.writeBuffer(aspectBuffer, 4, new Float32Array([time]));
-        for (let i = 0; i < kNumObjects; i++){ //2 floats per particle
-
-            let scale_x = dynamicData[i*3 + 0];
-            let scale_y = dynamicData[i*3 + 1];
-            let life = dynamicData[i*3 + 2];
-            const age = 1.0 - (life / INITIAL_LIFE);
-            const growth = age * GROWTH_AMOUNT;
-
-            if (life > 0){
-                life -= dt;
-                dynamicData[i*3 + 0] += growth * dt;
-                dynamicData[i*3 + 1] += growth*dt;
-                dynamicData[i*3 + 2] = life;
-            }
-            else {
-
-                dynamicData[i*3 + 0] = (0.5 + Math.random()*0.5)*scale;
-                dynamicData[i*3 + 1] = (0.5 + Math.random()*0.5)*scale;
-                dynamicData[i*3 + 2] = (0.5 + Math.random()*0.5)*INITIAL_LIFE;
-            }
-        }
-        
-        device.queue.writeBuffer(variableVertexBuffer, 0, dynamicData);
+        device.queue.writeBuffer(simParamBuffer,0, new Float32Array([dt,0,0,0]));
         //unifrom for some small data
         const commandEncoder = device.createCommandEncoder();
         this.resizeCanvas(canvas);
@@ -272,16 +328,21 @@ class Renderer {
         };
 
         // render pass 
+        const computePass = commandEncoder.beginComputePass();
+        computePass.setPipeline(computePipeline);
+        computePass.setBindGroup(0, computeBindGroup)
+        computePass.dispatchWorkgroups(Math.ceil(kNumObjects/64));
+        computePass.end();
+        if (!renderPipeline) return;
         const passEncoder = commandEncoder.beginRenderPass(renderPassDesc);
         passEncoder.setBindGroup(0, bindGroup);
-        
-        if (!renderPipeline) return;
         passEncoder.setViewport(0, 0, canvas.width,canvas.height,0,0); //idk
+
         passEncoder.setPipeline(renderPipeline);
+
         passEncoder.setVertexBuffer(0, vertexBuffer);
-        passEncoder.setVertexBuffer(1,staticVertexBuffer);
-        passEncoder.setVertexBuffer(2,variableVertexBuffer);
-        passEncoder.draw(vertices.length / 2, kNumObjects);
+        passEncoder.setVertexBuffer(1,particleBuffer);
+        passEncoder.draw(vertices.length /2, kNumObjects);
         passEncoder.end();
         device.queue.submit([commandEncoder.finish()]);
         requestAnimationFrame(this.frame);
