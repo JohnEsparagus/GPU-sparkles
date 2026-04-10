@@ -31,7 +31,7 @@ let  vertices = new Float32Array([
     ]);
 
 
-let scale = 0.01;
+let scale = 0.03;
 let kNumObjects = 2000;
 let particleData : Float32Array<ArrayBuffer>;
 
@@ -253,6 +253,18 @@ class Renderer {
                 entryPoint: "frag_main",
                 targets: [{
                     format: navigator.gpu.getPreferredCanvasFormat(),
+                    blend:{
+                        color:{
+                            operation: 'add',
+                            srcFactor: 'src-alpha',
+                            dstFactor:'one',
+                        },
+                        alpha:{
+                            operation: 'add',
+                            srcFactor:'one',
+                            dstFactor:'one',
+                        }
+                    }
                 }],
             },
             primitive:{

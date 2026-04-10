@@ -36,5 +36,6 @@ fn vert_main(vert:Vertex) -> VertexOut{
 
 @fragment
 fn frag_main(in: VertexOut) -> @location(0) vec4<f32> {
+
     return  in.color;
 }
