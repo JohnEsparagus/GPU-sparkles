@@ -41,12 +41,14 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
 
     let pull = -dir * (1.0/(r+0.12))*0.2;
 
+
+    //spatial randomness, 
     let seed = bitcast<u32>(p.position.x) ^ bitcast<u32>(p.position.y);
     let int_n = noise(seed);
     let float_n = f32(int_n) / f32(0xffffffffu);
 
     let targetVelocity = (pull + orbit + wiggle);
-    p.velocity = mix(p.velocity, targetVelocity, 0.1);
+    p.velocity = mix(p.velocity, targetVelocity, vec2f(0.1,0.1));
 
     p.position += p.velocity * params.dt;
     p.life -= params.dt;
@@ -57,6 +59,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         p.position = vec2f(cos(angle), sin(angle))*1.5;
         p.velocity = vec2f(0.0,0.0);
     } */
+
     particles[i] = p;
 
 } // made this with ai btw

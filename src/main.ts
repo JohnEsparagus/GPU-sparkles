@@ -12,6 +12,8 @@ let particleBuffer : GPUBuffer;
 let particleVertexLayout : GPUVertexBufferLayout;
 let adapter :GPUAdapter | null;
 const infoElem = document.querySelector('#info');
+const simParamData = new Float32Array(4);
+const aspectData = new Float32Array(4);
 let simParamBuffer: GPUBuffer;
 let aspectBuffer: GPUBuffer ;
 let bindGroup: GPUBindGroup | null;
@@ -20,6 +22,8 @@ let bindGroupLayout: GPUBindGroupLayout | null;
 let canvas:HTMLCanvasElement;
 let computeBindGroupLayout: GPUBindGroupLayout;
 let time = 0;
+let frameTimes: number[] = [];
+let lastReportTime = 0; //deubgging delete later
 let start = performance.now();
 let  vertices = new Float32Array([
   -0.5, -0.6,
@@ -31,7 +35,7 @@ let  vertices = new Float32Array([
     ]);
 
 
-let scale = 0.03;
+let scale = 0.08;
 let kNumObjects = 2000;
 let particleData : Float32Array<ArrayBuffer>;
 
@@ -281,7 +285,11 @@ class Renderer {
             size: 16,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(aspectBuffer, 0, new Float32Array([aspect,time,0,0]));
+
+        aspectData[0] = aspect;
+        aspectData[1] = 0; //time updated
+        device.queue.writeBuffer(aspectBuffer, 0, aspectData);
+
         const bindGroupLayout : GPUBindGroupLayout = renderPipeline?.getBindGroupLayout(0);
         bindGroup = device.createBindGroup({
             layout: bindGroupLayout,
@@ -323,20 +331,35 @@ class Renderer {
     }
 
 
+
      frame = () => {
         const now = performance.now();
         const time = (now - start) / 1000;
         const dt = (now - lastFrameTime)/ 1000
         lastFrameTime = now;
 
+        frameTimes.push(dt);
+
+        if (frameTimes.length >= 100) frameTimes.shift();
+
+        let avgfps = frameTimes.reduce((a,b)=> a+b) / frameTimes.length; 
+        
+        if (time - lastReportTime > 1){
+        console.log(`fps: ${(1 / avgfps).toFixed(0)}`);
+        lastReportTime = time
+        }
+
             infoElem.textContent = `\
-fps: ${(1 / dt).toFixed(1)}
+fps: ${(1 / avgfps).toFixed(0)}
 time: ${time.toFixed(1)}s
 `;
         if (!device) return;
         if (!context) return;
-        device.queue.writeBuffer(aspectBuffer, 4, new Float32Array([time]));
-        device.queue.writeBuffer(simParamBuffer,0, new Float32Array([dt,0,0,0]));
+        aspectData[1] = time;
+        device.queue.writeBuffer(aspectBuffer, 0, aspectData);
+
+        simParamData[0] = dt;
+        device.queue.writeBuffer(simParamBuffer, 0, simParamData);
         //unifrom for some small data
         const commandEncoder = device.createCommandEncoder();
         this.resizeCanvas(canvas);
