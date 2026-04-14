@@ -8,20 +8,27 @@ let context: GPUCanvasContext | null;
 let renderPipeline: GPURenderPipeline | null;
 let computePipeline : GPUComputePipeline | null;
 let vertexBuffer: GPUBuffer ;
-let particleBuffer : GPUBuffer;
+let particleBufferA : GPUBuffer;
+let particleBufferB : GPUBuffer;
+
 let particleVertexLayout : GPUVertexBufferLayout;
 let adapter :GPUAdapter | null;
 const infoElem = document.querySelector('#info');
 const simParamData = new Float32Array(4);
 const aspectData = new Float32Array(4);
+let readBuffer: GPUBuffer;
+let writeBuffer: GPUBuffer;
 let simParamBuffer: GPUBuffer;
 let aspectBuffer: GPUBuffer ;
 let bindGroup: GPUBindGroup | null;
-let computeBindGroup: GPUBindGroup | null;
+let computeBindGroupA: GPUBindGroup | null;
+let computeBindGroupB: GPUBindGroup | null;
+
 let bindGroupLayout: GPUBindGroupLayout | null;
 let canvas:HTMLCanvasElement;
 let computeBindGroupLayout: GPUBindGroupLayout;
 let time = 0;
+let frameCount = 0;
 let frameTimes: number[] = [];
 let lastReportTime = 0; //deubgging delete later
 let start = performance.now();
@@ -107,13 +114,24 @@ class Renderer {
             ], offset);
         }
         
-        particleBuffer = device.createBuffer({
+
+        particleBufferA = device.createBuffer({
             size: particleData.byteLength,
             usage:
             GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-        });
+        }); // valid to write to
+        particleBufferB = device.createBuffer({
+            size: particleData.byteLength,
+            usage:
+            GPUBufferUsage.STORAGE |  GPUBufferUsage.VERTEX,
+        }); //can read from
+
+        device.queue.writeBuffer(particleBufferA,  0, particleData);
+        device.queue.writeBuffer(particleBufferB,  0, particleData);
+
+        writeBuffer = particleBufferA;
+        readBuffer = particleBufferB;
         
-        device.queue.writeBuffer(particleBuffer,  0, particleData);
 
 
        particleVertexLayout = {
@@ -166,6 +184,11 @@ class Renderer {
             },
             {
                 binding:1,
+                visibility: GPUShaderStage.COMPUTE,
+                buffer: {type:"storage"},
+            },
+            {
+                binding:2,
                 visibility: GPUShaderStage.COMPUTE,
                 buffer: {type:"uniform"},
             },
@@ -302,18 +325,39 @@ class Renderer {
         });
 
 
-        computeBindGroup = device.createBindGroup({
+        computeBindGroupA = device.createBindGroup({
             layout: computeBindGroupLayout,
             entries: [{
                 binding: 0,
-                resource: { buffer: particleBuffer } // No 'visibility' property inside createBindGroup
+                resource: { buffer: particleBufferA } // No 'visibility' property inside createBindGroup
             },
             {
                 binding:1,
+                resource: {buffer: particleBufferB }
+            },
+            {
+                binding:2,
                 resource: {buffer:simParamBuffer}
             }
             ],
         });
+        computeBindGroupB = device.createBindGroup({
+            layout: computeBindGroupLayout,
+            entries: [{
+                binding: 0,
+                resource: { buffer: particleBufferB } // No 'visibility' property inside createBindGroup
+            },
+            {
+                binding:1,
+                resource: {buffer: particleBufferA }
+            },
+            {
+                binding:2,
+                resource: {buffer:simParamBuffer}
+            }
+            ],
+        });
+        
         
     }
      resizeCanvas(canvas:HTMLCanvasElement){
@@ -330,12 +374,15 @@ class Renderer {
         return needResize;
     }
 
-
+     swapBuffers(){
+        [readBuffer, writeBuffer]  = [writeBuffer, readBuffer];
+     }
 
      frame = () => {
+        frameCount++;
         const now = performance.now();
         const time = (now - start) / 1000;
-        const dt = (now - lastFrameTime)/ 1000
+        const dt = Math.min((now - lastFrameTime)/ 1000,0.5);
         lastFrameTime = now;
 
         frameTimes.push(dt);
@@ -377,10 +424,14 @@ time: ${time.toFixed(1)}s
             colorAttachments:[colorAttachment]
         };
 
+        const activeComputeBindGroup = (frameCount % 2 === 0)
+            ? computeBindGroupA : computeBindGroupB;
+        
+
         // render pass 
         const computePass = commandEncoder.beginComputePass();
         computePass.setPipeline(computePipeline);
-        computePass.setBindGroup(0, computeBindGroup)
+        computePass.setBindGroup(0, activeComputeBindGroup)
         computePass.dispatchWorkgroups(Math.ceil(kNumObjects/64));
         computePass.end();
         if (!renderPipeline) return;
@@ -391,11 +442,12 @@ time: ${time.toFixed(1)}s
         passEncoder.setPipeline(renderPipeline);
 
         passEncoder.setVertexBuffer(0, vertexBuffer);
-        passEncoder.setVertexBuffer(1,particleBuffer);
+        passEncoder.setVertexBuffer(1,readBuffer);
         passEncoder.draw(vertices.length /2, kNumObjects);
         passEncoder.end();
         device.queue.submit([commandEncoder.finish()]);
         requestAnimationFrame(this.frame);
+        this.swapBuffers();
     }
 }
 const renderer = new Renderer();

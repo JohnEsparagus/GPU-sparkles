@@ -11,8 +11,9 @@ struct Params{
     dt:f32,
 }
 
-@group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
-@group(0) @binding(1) var<uniform> params: Params;
+@group(0) @binding(0) var<storage, read_write> output_particles: array<Particle>;//another one
+@group(0) @binding(1) var<storage, read_write> input_particles: array<Particle>;
+@group(0) @binding(2) var<uniform> params: Params;
 
 fn noise(n: u32)->u32{
     var h = n * 747796405u + 2891336453u;
@@ -23,9 +24,9 @@ fn noise(n: u32)->u32{
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let i = id.x;
-    if (i >= arrayLength(&particles)) { return; }
+    if (i >= arrayLength(&input_particles)) { return; }
 
-    var p = particles[i];
+    var p = input_particles[i];
     
     let dir = normalize(p.position); //compute unit vector
     let r = length(p.position);
@@ -60,6 +61,6 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         p.velocity = vec2f(0.0,0.0);
     } */
 
-    particles[i] = p;
+    output_particles[i] = p;
 
 } // made this with ai btw
