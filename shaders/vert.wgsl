@@ -28,7 +28,11 @@ struct Uniforms{
 fn vert_main(vert:Vertex) -> VertexOut{
 
     var output : VertexOut;
-    output.position = vec4f((vert.quadPos* vert.scale + vert.particlePos)/frameUniform.aspect,0.0, 1.0);
+    let worldPos = vert.quadPos* vert.scale + vert.particlePos;
+
+
+
+    output.position = vec4f((worldPos.x)/frameUniform.aspect, worldPos.y ,0.0, 1.0);
     output.color = vert.color;
     output.life = vert.life;
     return output;

@@ -1,7 +1,6 @@
-const BUFFER_SIZE = 10000;
-const GRID_SIZE = 4;
+import * as Tools from "./tools";
+
 const INITIAL_LIFE = 2;
-const GROWTH_AMOUNT = 0.05;
 
 let device: GPUDevice ;
 let context: GPUCanvasContext | null;
@@ -15,9 +14,9 @@ let particleVertexLayout : GPUVertexBufferLayout;
 let adapter :GPUAdapter | null;
 const infoElem = document.querySelector('#info');
 const simParamData = new Float32Array(4);
+const simParamDataU32 = new Uint32Array(simParamData.buffer);
 const aspectData = new Float32Array(4);
-let readBuffer: GPUBuffer;
-let writeBuffer: GPUBuffer;
+
 let simParamBuffer: GPUBuffer;
 let aspectBuffer: GPUBuffer ;
 let bindGroup: GPUBindGroup | null;
@@ -42,8 +41,8 @@ let  vertices = new Float32Array([
     ]);
 
 
-let scale = 0.08;
-let kNumObjects = 2000;
+let scale = 0.001;
+let kNumObjects = 20000000;
 let particleData : Float32Array<ArrayBuffer>;
 
 
@@ -87,7 +86,13 @@ class Renderer {
         if (!adapter) {
             throw new Error("Failed  to get adapter to GPU");
         }
-        device = await adapter.requestDevice();
+        device = await adapter.requestDevice({
+            requiredLimits:{
+                maxBufferSize: 2147483648,
+                maxStorageBufferBindingSize: 2147483644,
+            }
+        });
+        
         if (!device){
             throw new Error("Failed to request device from adapter")
         }
@@ -123,14 +128,12 @@ class Renderer {
         particleBufferB = device.createBuffer({
             size: particleData.byteLength,
             usage:
-            GPUBufferUsage.STORAGE |  GPUBufferUsage.VERTEX,
+            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
         }); //can read from
 
         device.queue.writeBuffer(particleBufferA,  0, particleData);
         device.queue.writeBuffer(particleBufferB,  0, particleData);
 
-        writeBuffer = particleBufferA;
-        readBuffer = particleBufferB;
         
 
 
@@ -374,9 +377,7 @@ class Renderer {
         return needResize;
     }
 
-     swapBuffers(){
-        [readBuffer, writeBuffer]  = [writeBuffer, readBuffer];
-     }
+
 
      frame = () => {
         frameCount++;
@@ -402,20 +403,27 @@ time: ${time.toFixed(1)}s
 `;
         if (!device) return;
         if (!context) return;
+        const didResize = this.resizeCanvas(canvas);
+        if (didResize){
+            aspectData[0] = canvas.width / canvas.height;
+        }
         aspectData[1] = time;
         device.queue.writeBuffer(aspectBuffer, 0, aspectData);
+        const totalWorkGroups = Math.ceil(kNumObjects/64);
+        const workGroupX = Tools.nextPowerOfTwo(Math.sqrt(totalWorkGroups));
+        const workGroupY = Math.ceil(totalWorkGroups / workGroupX);
 
         simParamData[0] = dt;
+        simParamDataU32[1] = workGroupX * 64;
         device.queue.writeBuffer(simParamBuffer, 0, simParamData);
         //unifrom for some small data
         const commandEncoder = device.createCommandEncoder();
-        this.resizeCanvas(canvas);
         
         let colorTexture = context.getCurrentTexture();
         let colorTextureView = colorTexture.createView();
 
         let colorAttachment: GPURenderPassColorAttachment = {
-            clearValue: {r:1,g:0,b:0,a:1},
+            clearValue: {r:0,g:0,b:0,a:1},
             loadOp: 'clear',
             storeOp: 'store',
             view: colorTextureView
@@ -424,15 +432,19 @@ time: ${time.toFixed(1)}s
             colorAttachments:[colorAttachment]
         };
 
-        const activeComputeBindGroup = (frameCount % 2 === 0)
+        const isEven : boolean = (frameCount % 2) === 0; // 2%2 = 0, 1%2 = 1
+        const activeComputeBindGroup = (isEven)
             ? computeBindGroupA : computeBindGroupB;
+
+        const renderBuffer = (isEven) ? particleBufferB : particleBufferA;
         
 
         // render pass 
+
         const computePass = commandEncoder.beginComputePass();
         computePass.setPipeline(computePipeline);
         computePass.setBindGroup(0, activeComputeBindGroup)
-        computePass.dispatchWorkgroups(Math.ceil(kNumObjects/64));
+        computePass.dispatchWorkgroups(workGroupX, workGroupY, 1);
         computePass.end();
         if (!renderPipeline) return;
         const passEncoder = commandEncoder.beginRenderPass(renderPassDesc);
@@ -442,12 +454,11 @@ time: ${time.toFixed(1)}s
         passEncoder.setPipeline(renderPipeline);
 
         passEncoder.setVertexBuffer(0, vertexBuffer);
-        passEncoder.setVertexBuffer(1,readBuffer);
+        passEncoder.setVertexBuffer(1,renderBuffer);
         passEncoder.draw(vertices.length /2, kNumObjects);
         passEncoder.end();
         device.queue.submit([commandEncoder.finish()]);
         requestAnimationFrame(this.frame);
-        this.swapBuffers();
     }
 }
 const renderer = new Renderer();
