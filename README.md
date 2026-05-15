@@ -15,12 +15,12 @@ This project started as following the tutorial to https://codelabs.developers.go
 - [x] Bind Groups and Pipeline Setup
 - [x] Additive Blending
 - [x] Frame Loop with Delta Time
-- [ ] Aspect Ratio Handling (partially complete)
+- [x] Aspect Ratio Handling (partially complete)
 - [x] Particle Lifecycle Management
 - [ ] Gravity & Forces
 - [ ] Turbulence / Noise
 - [ ] Textured Particles
-- [ ] Ping-Pong Buffers
+- [x] Ping-Pong Buffers
 - [ ] GPU-Based Emission
 - [ ] Indirect Drawing
 - [ ] Particle Interactions
