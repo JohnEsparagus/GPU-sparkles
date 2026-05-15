@@ -383,7 +383,8 @@ class Renderer {
         frameCount++;
         const now = performance.now();
         const time = (now - start) / 1000;
-        const dt = Math.min((now - lastFrameTime)/ 1000,0.5);
+        
+        const dt = Math.min((now - lastFrameTime)/ 1000,0.0333); //cap dt at 0.033333  so approx 1/30 of second
         lastFrameTime = now;
 
         frameTimes.push(dt);
