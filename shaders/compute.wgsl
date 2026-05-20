@@ -34,6 +34,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let float_n = f32(int_n) / f32(0xffffffffu);
     let int_n2   = noise(int_n);
     let float_n2 = f32(int_n2) / f32(0xffffffffu);
+    let int_n3 = noise(int_n2 ^ bitcast<u32>(p.life));
+    let float_n3 = f32(int_n3) / f32(0xffffffffu);
+    let int_n4 = noise(int_n3);
+    let float_n4 = f32(int_n4) / f32(0xffffffffu);
+
 
     let r         = length(p.position);
     let dir       = normalize(p.position);
@@ -49,14 +54,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // accretion disk — squeezes particles toward the equator
     let disk_squeeze = vec2f(0.0, -p.position.y * 0.4);
 
+    let turb_angle = float_n3 * 6.2831853;
+    let turb = vec2f(cos(turb_angle), sin(turb_angle))*0.05; 
+
     let targetVelocity = gravity + orbit + disk_squeeze;
-    p.velocity = mix(p.velocity, targetVelocity, vec2f(0.06));
+    p.velocity = mix(p.velocity, targetVelocity, vec2f(0.06)) + turb;
 
     p.position += p.velocity * params.dt;
     p.life     -= params.dt;
 
     // consumed by event horizon OR lifetime expired → respawn at outer ring
-    if (p.life <= 0.0 || r < 0.08) {
+    if (p.life <= 0.0 || r < 0.066) { //life is NOT 0 anymoreee
         let spawn_r     = 1.2 + float_n2 * 0.4;
         let spawn_angle = float_n * 6.2831853;
         p.position = vec2f(cos(spawn_angle), sin(spawn_angle)) * spawn_r;

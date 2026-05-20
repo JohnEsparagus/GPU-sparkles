@@ -16,9 +16,15 @@ const infoElem = document.querySelector('#info');
 const simParamData = new Float32Array(4);
 const simParamDataU32 = new Uint32Array(simParamData.buffer);
 const aspectData = new Float32Array(4);
-
+const cameraData = new Float32Array([
+    1,0,0,0,
+    0,1,0,0,
+    0,0,1,0,
+    0,0,0,1,
+]);
 let simParamBuffer: GPUBuffer;
 let aspectBuffer: GPUBuffer ;
+let cameraBuffer: GPUBuffer;
 let bindGroup: GPUBindGroup | null;
 let computeBindGroupA: GPUBindGroup | null;
 let computeBindGroupB: GPUBindGroup | null;
@@ -312,9 +318,16 @@ class Renderer {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
+        cameraBuffer = device.createBuffer({
+            size:64,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
         aspectData[0] = aspect;
         aspectData[1] = 0; //time updated
         device.queue.writeBuffer(aspectBuffer, 0, aspectData);
+
+        device.queue.writeBuffer(cameraBuffer, 0, cameraData);
 
         const bindGroupLayout : GPUBindGroupLayout = renderPipeline?.getBindGroupLayout(0);
         bindGroup = device.createBindGroup({
@@ -324,8 +337,15 @@ class Renderer {
                 resource:{
                     buffer:aspectBuffer
                 },
-            },],
-        });
+            },
+            {
+                binding:1,
+                resource:{
+                    buffer:cameraBuffer
+                },
+            },
+        ],    
+    });
 
 
         computeBindGroupA = device.createBindGroup({

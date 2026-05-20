@@ -21,10 +21,17 @@ struct Uniforms{
     time: f32,
 };
 
+struct Camera{
+    mvp: mat4x4<f32>,
+}
+
+
 
 
 @group(0) @binding(0) var<uniform> frameUniform: Uniforms;
+@group(0) @binding(1) var<uniform> camera: Camera;
 @vertex 
+
 
 fn vert_main(vert:Vertex) -> VertexOut{
 
@@ -33,7 +40,7 @@ fn vert_main(vert:Vertex) -> VertexOut{
 
 
 
-    output.position = vec4f((worldPos.x)/frameUniform.aspect, worldPos.y ,0.0, 1.0);
+    output.position = camera.mvp * vec4f((worldPos.x)/frameUniform.aspect, worldPos.y ,0.0, 1.0);
     output.color = vert.color;
     output.life = vert.life;
 
@@ -43,8 +50,10 @@ fn vert_main(vert:Vertex) -> VertexOut{
 
 @fragment
 fn frag_main(in: VertexOut) -> @location(0) vec4<f32> {
-    let edge = 0.2;
-    let length = length(in.uv - vec2f(0.5));
-    return  in.color * step(length, edge);
+    let edge = 0.3;
+    let len = length(in.uv);
+    if len > 0.5 {discard;}
+    let alpha = 1.0 - smoothstep(0.0, edge, len);
+    return  vec4f(in.color.rgb, in.color.a * alpha);
     // x^2 + y^2 <= r^2,   if r = lets say 0.8 
 }
