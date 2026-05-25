@@ -38,13 +38,13 @@ fn vert_main(vert:Vertex) -> VertexOut{
     var output : VertexOut;
     let worldPos = vert.quadPos* vert.scale + vert.particlePos;
 
+    let scale = frameUniform.aspect;
 
-
-    output.position = camera.mvp * vec4f((worldPos.x)/frameUniform.aspect, worldPos.y ,0.0, 1.0);
+    output.position = camera.mvp * vec4f(worldPos.x, worldPos.y ,-1.0, 1.0);
     output.color = vert.color;
     output.life = vert.life;
 
-    output.uv = vec2f(vert.quadPos.x + 0.5, (vert.quadPos.y / 1.2) + 0.5);
+    output.uv = vec2f(vert.quadPos.x , (vert.quadPos.y / 1.2));
     return output;
 }
 

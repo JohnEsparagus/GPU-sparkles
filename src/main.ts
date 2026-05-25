@@ -1,4 +1,6 @@
 import * as Tools from "./tools";
+import * as Camera from "./camera";
+import { mat4 } from 'wgpu-matrix';
 
 const INITIAL_LIFE = 2;
 
@@ -16,7 +18,7 @@ const infoElem = document.querySelector('#info');
 const simParamData = new Float32Array(4);
 const simParamDataU32 = new Uint32Array(simParamData.buffer);
 const aspectData = new Float32Array(4);
-const cameraData = new Float32Array([
+let cameraData = new Float32Array([
     1,0,0,0,
     0,1,0,0,
     0,0,1,0,
@@ -47,8 +49,8 @@ let  vertices = new Float32Array([
     ]);
 
 
-let scale = 0.001;
-let kNumObjects = 20000000;
+let scale = 0.1;
+let kNumObjects = 2000;
 let particleData : Float32Array<ArrayBuffer>;
 
 
@@ -94,8 +96,10 @@ class Renderer {
         }
         device = await adapter.requestDevice({
             requiredLimits:{
-                maxBufferSize: 2147483648,
-                maxStorageBufferBindingSize: 2147483644,
+                maxBufferSize: 1073741824,
+                maxStorageBufferBindingSize: 1073741824,                
+                //maxBufferSize: 2147483648,
+                //maxStorageBufferBindingSize: 2147483644,
             }
         });
         
@@ -327,7 +331,16 @@ class Renderer {
         aspectData[1] = 0; //time updated
         device.queue.writeBuffer(aspectBuffer, 0, aspectData);
 
-        device.queue.writeBuffer(cameraBuffer, 0, cameraData);
+        const fovInRadians = (90 * Math.PI) / 180;
+        const proj = Camera.perspective(fovInRadians,aspect,0.01,100);
+
+        const eye: [number, number, number] = [0, 0, 3];
+        const target: [number, number, number] = [0, 0, 0];
+        const worldUp: [number, number, number] = [0, 1, 0];
+        const view = Camera.lookAt(eye,target,worldUp);
+        const mvp = Tools.mat4Mult(proj,view)
+        const cameraData = mvp;
+        device.queue.writeBuffer(cameraBuffer, 0, cameraData as Float32Array<ArrayBuffer>);
 
         const bindGroupLayout : GPUBindGroupLayout = renderPipeline?.getBindGroupLayout(0);
         bindGroup = device.createBindGroup({
@@ -430,6 +443,19 @@ time: ${time.toFixed(1)}s
         }
         aspectData[1] = time;
         device.queue.writeBuffer(aspectBuffer, 0, aspectData);
+
+                const fovInRadians = (90 * Math.PI) / 180;
+        const proj = Camera.perspective(fovInRadians,aspectData[0],0.01,100);
+
+        const eye: [number, number, number] = [Math.sin(time), Math.cos(time), Math.sin(time)*3];
+        const target: [number, number, number] = [0, 0, 0];
+        const worldUp: [number, number, number] = [0, 1, 0];
+        const view = Camera.lookAt(eye,target,worldUp);
+        const mvp = Tools.mat4Mult(proj,view)
+        const cameraData = mvp;
+        device.queue.writeBuffer(cameraBuffer, 0, cameraData as Float32Array<ArrayBuffer>);
+
+
         const totalWorkGroups = Math.ceil(kNumObjects/64);
         const workGroupX = Tools.nextPowerOfTwo(Math.sqrt(totalWorkGroups));
         const workGroupY = Math.ceil(totalWorkGroups / workGroupX);

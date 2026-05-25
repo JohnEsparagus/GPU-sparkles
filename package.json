@@ -10,7 +10,12 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/gl-matrix": "^2.4.5",
     "@webgpu/types": "^0.1.68",
     "vite": "^7.3.0"
+  },
+  "dependencies": {
+    "gl-matrix": "^3.4.4",
+    "wgpu-matrix": "^3.4.2"
   }
 }
