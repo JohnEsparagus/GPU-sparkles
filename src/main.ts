@@ -12,18 +12,18 @@ let vertexBuffer: GPUBuffer ;
 let particleBufferA : GPUBuffer;
 let particleBufferB : GPUBuffer;
 
+
+
 let particleVertexLayout : GPUVertexBufferLayout;
 let adapter :GPUAdapter | null;
 const infoElem = document.querySelector('#info');
 const simParamData = new Float32Array(4);
 const simParamDataU32 = new Uint32Array(simParamData.buffer);
 const aspectData = new Float32Array(4);
-let cameraData = new Float32Array([
-    1,0,0,0,
-    0,1,0,0,
-    0,0,1,0,
-    0,0,0,1,
-]);
+let cameraData = new Float32Array(32);
+        let fovInRadians : number;
+        let proj : Float32Array;
+
 let simParamBuffer: GPUBuffer;
 let aspectBuffer: GPUBuffer ;
 let cameraBuffer: GPUBuffer;
@@ -323,7 +323,7 @@ class Renderer {
         });
 
         cameraBuffer = device.createBuffer({
-            size:64,
+            size:128,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
@@ -331,15 +331,16 @@ class Renderer {
         aspectData[1] = 0; //time updated
         device.queue.writeBuffer(aspectBuffer, 0, aspectData);
 
-        const fovInRadians = (90 * Math.PI) / 180;
-        const proj = Camera.perspective(fovInRadians,aspect,0.01,100);
+        fovInRadians = (90 * Math.PI) / 180;
+        proj = Camera.perspective(fovInRadians,aspect,0.1,100);
 
         const eye: [number, number, number] = [0, 0, 3];
         const target: [number, number, number] = [0, 0, 0];
         const worldUp: [number, number, number] = [0, 1, 0];
         const view = Camera.lookAt(eye,target,worldUp);
-        const mvp = Tools.mat4Mult(proj,view)
-        const cameraData = mvp;
+
+        cameraData.set(proj, 0);
+        cameraData.set(view, 16);
         device.queue.writeBuffer(cameraBuffer, 0, cameraData as Float32Array<ArrayBuffer>);
 
         const bindGroupLayout : GPUBindGroupLayout = renderPipeline?.getBindGroupLayout(0);
@@ -420,6 +421,7 @@ class Renderer {
         const dt = Math.min((now - lastFrameTime)/ 1000,0.0333); //cap dt at 0.033333  so approx 1/30 of second
         lastFrameTime = now;
 
+        
         frameTimes.push(dt);
 
         if (frameTimes.length >= 100) frameTimes.shift();
@@ -435,24 +437,27 @@ class Renderer {
 fps: ${(1 / avgfps).toFixed(0)}
 time: ${time.toFixed(1)}s
 `;
+
+
         if (!device) return;
         if (!context) return;
         const didResize = this.resizeCanvas(canvas);
         if (didResize){
             aspectData[0] = canvas.width / canvas.height;
+            fovInRadians = (90 * Math.PI) / 180;
+            proj = Camera.perspective(fovInRadians,aspectData[0],0.0,100);
         }
         aspectData[1] = time;
         device.queue.writeBuffer(aspectBuffer, 0, aspectData);
 
-                const fovInRadians = (90 * Math.PI) / 180;
-        const proj = Camera.perspective(fovInRadians,aspectData[0],0.01,100);
-
-        const eye: [number, number, number] = [Math.sin(time), Math.cos(time), Math.sin(time)*3];
-        const target: [number, number, number] = [0, 0, 0];
-        const worldUp: [number, number, number] = [0, 1, 0];
-        const view = Camera.lookAt(eye,target,worldUp);
-        const mvp = Tools.mat4Mult(proj,view)
-        const cameraData = mvp;
+        const radius = 3;
+        const height = 1.5;  
+        let eye: [number, number, number] =  [Math.sin(time) * radius,  height, Math.cos(time) * radius,]
+        let target: [number, number, number] = [0, 0, 0];
+        let worldUp: [number, number, number] = [0, 1, 0];
+        let view = Camera.lookAt(eye,target,worldUp);
+        cameraData.set(proj, 0);
+        cameraData.set(view, 16);
         device.queue.writeBuffer(cameraBuffer, 0, cameraData as Float32Array<ArrayBuffer>);
 
 

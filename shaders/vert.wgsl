@@ -22,7 +22,8 @@ struct Uniforms{
 };
 
 struct Camera{
-    mvp: mat4x4<f32>,
+    proj: mat4x4<f32>,
+    view: mat4x4<f32>,
 }
 
 
@@ -36,11 +37,11 @@ struct Camera{
 fn vert_main(vert:Vertex) -> VertexOut{
 
     var output : VertexOut;
-    let worldPos = vert.quadPos* vert.scale + vert.particlePos;
-
     let scale = frameUniform.aspect;
-
-    output.position = camera.mvp * vec4f(worldPos.x, worldPos.y ,-1.0, 1.0);
+//now camera is [0] for 
+    var viewspace = camera.view * vec4f(vert.particlePos.x, vert.particlePos.y ,1.0, 1.0);
+    viewspace = vec4(viewspace.xy + vert.quadPos* vert.scale, viewspace.z, viewspace.w);
+    output.position = camera.proj * viewspace;
     output.color = vert.color;
     output.life = vert.life;
 
