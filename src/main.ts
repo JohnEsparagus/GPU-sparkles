@@ -7,7 +7,7 @@ const INITIAL_LIFE = 2;
 let device: GPUDevice ;
 let context: GPUCanvasContext | null;
 let renderPipeline: GPURenderPipeline | null;
-let computePipeline : GPUComputePipeline | null;
+let computePipeline : GPUComputePipeline;
 let vertexBuffer: GPUBuffer ;
 let particleBufferA : GPUBuffer;
 let particleBufferB : GPUBuffer;
@@ -31,7 +31,7 @@ let bindGroup: GPUBindGroup | null;
 let computeBindGroupA: GPUBindGroup | null;
 let computeBindGroupB: GPUBindGroup | null;
 
-let bindGroupLayout: GPUBindGroupLayout | null;
+let bindGroupLayout: GPUBindGroupLayout;
 let canvas:HTMLCanvasElement;
 let computeBindGroupLayout: GPUBindGroupLayout;
 let time = 0;
@@ -54,8 +54,26 @@ let kNumObjects = 2000;
 let particleData : Float32Array<ArrayBuffer>;
 
 
+
 let lastFrameTime = performance.now();
 
+let yaw: number = -Math.PI / 2; 
+let pitch: number = 0;         
+const sensitivity: number = 0.002;
+    const keysPressed: Record<string, boolean> = {};
+
+window.addEventListener('keydown', (e) => {
+                    keysPressed[e.key.toLowerCase()] = true;
+    e.preventDefault(); // Prevent page scrolling with arrow keys
+});
+
+window.addEventListener('keyup', (e) => {
+    keysPressed[e.key.toLowerCase()] = false;
+    });
+let cameraEye: [number, number, number] = [0, 0, 3];
+let cameraTarget: [number, number, number] = [0, 0, 0];
+const cameraWorldUp: [number, number, number] = [0, 1, 0];
+const cameraSpeed = 2.5;
 
 class Renderer { 
     constructor(){};
@@ -69,6 +87,7 @@ class Renderer {
         this.initBuffers();
         await this.initPipelines();
         this.initBindGroups();
+        this.initListenerSetup();
         requestAnimationFrame(this.frame);
     }
 
@@ -82,6 +101,21 @@ class Renderer {
         if (!canvas || canvas == null) {
             throw new Error("Canvas elment not found in dom")
         }
+
+        canvas.addEventListener('click', () => {
+            canvas.requestPointerLock();
+        });
+
+        document.addEventListener('mousemove', (event: MouseEvent) => {
+            if (document.pointerLockElement === canvas) {
+                yaw += event.movementX * sensitivity;
+                
+                pitch -= event.movementY * sensitivity;
+
+                const maxPitch = (89 * Math.PI) / 180;
+                pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+            }
+        });        
         context = canvas.getContext("webgpu");
         if (!context){
             throw new Error("failed to get draw context from canvas)");
@@ -112,20 +146,34 @@ class Renderer {
             alphaMode: "premultiplied",
         });
     }
+    initListenerSetup(){
+        const keysPressed: Record<string, boolean> = {};
 
+            window.addEventListener('keydown', (e) => {
+                keysPressed[e.key.toLowerCase()] = true;
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keysPressed[e.key.toLowerCase()] = false;
+            });
+    }
     initBuffers() {
         
-        const particleStride = 48; //2 * 4, 2*4, 4*4 + 4 + 4 pos scale col life pad
+        const particleStride = 80; //2 * 4, 2*4, 4*4 + 4 + 4 pos scale col life pad
         particleData = new Float32Array(kNumObjects*(particleStride/4));
 
         for (let i = 0; i < kNumObjects; i++) {
             const offset = i * (particleStride/4);
             particleData.set([
-                Math.random()*2 - 1,Math.random()*2 - 1,
-                scale,scale,
+                Math.random()*2 - 1,Math.random()*2 - 1,Math.random()*2 - 1,0,
+                0.0,0.0,0.0,0.0,
                 Math.random(), Math.random(),Math.random(),1.0,
+
+                scale,scale,
+
                 INITIAL_LIFE*Math.random(),
                 0.0,
+                0.0,0.0,0.0,0.0,
             ], offset);
         }
         
@@ -152,23 +200,23 @@ class Renderer {
        stepMode: "instance",
        attributes: [
         {
-            shaderLocation:1, offset:0, format:'float32x2' //pos
+            shaderLocation:1, offset:0, format:'float32x4' //pos
         },
         {
-            shaderLocation:2, offset:8, format:'float32x2' //scale
+            shaderLocation:2, offset:16, format:'float32x4' //velocity
 
         },
         {
-            shaderLocation:3, offset:16, format:'float32x4' //color
+            shaderLocation:3, offset:32, format:'float32x4' //color
         },
         {
-            shaderLocation:4, offset:32, format:'float32' //velocity
+            shaderLocation:4, offset:48, format:'float32x2' //scale
         },
         {
-            shaderLocation:5, offset:40, format:'float32' //life
+            shaderLocation:5, offset:56, format:'float32' //life
         },
         {
-            shaderLocation:6, offset:44, format:'float32' //grav
+            shaderLocation:6, offset:60, format:'float32' //grav
         },
 
        ],
@@ -213,7 +261,7 @@ class Renderer {
             code: computeShadername
         });
         if (computeShaderModule){
-            console.log("ShaderModule successful initialisation");
+            console.log("ShaderComputeModule successful initialisation");
         }
         computePipeline = device.createComputePipeline({
             layout: device.createPipelineLayout({
@@ -238,36 +286,36 @@ class Renderer {
             ],
         },
         {
-            arrayStride: 48, //particle stride
+            arrayStride: 80, //particle stride
             stepMode: 'instance',   
             attributes:[{
                 shaderLocation:1, //pos
                 offset:0,
-                format:"float32x2"
+                format:"float32x4"
             },
             {
-                shaderLocation:2, //scale
-                offset:8,
-                format:"float32x2"
+                shaderLocation:2, //velocity
+                offset:16,
+                format:"float32x4"
             },
             {
                 shaderLocation:3, //color
-                offset:16,
+                offset:24,
                 format:"float32x4"
             },            {
-                shaderLocation:4, //velocity
-                offset:32,
+                shaderLocation:4, //scale
+                offset:48,
                 format:"float32x2"
             },            {
-                shaderLocation:5, //life
-                offset:40,
+                shaderLocation:5, //gravity
+                offset:56,
                 format:"float32"
             },
             {
-                shaderLocation:6, //gravity
-                offset:44,
+                shaderLocation:6, //life
+                offset:60,
                 format:"float32"
-            },
+            },//rest is padded to 80 autoamatically
         ],
         },];
         const shadername = await fetch("./shaders/vert.wgsl").then(r=>r.text());
@@ -334,33 +382,33 @@ class Renderer {
         fovInRadians = (90 * Math.PI) / 180;
         proj = Camera.perspective(fovInRadians,aspect,0.1,100);
 
-        const eye: [number, number, number] = [0, 0, 3];
-        const target: [number, number, number] = [0, 0, 0];
-        const worldUp: [number, number, number] = [0, 1, 0];
-        const view = Camera.lookAt(eye,target,worldUp);
+        const view = Camera.lookAt(cameraTarget,cameraTarget,cameraWorldUp);
 
         cameraData.set(proj, 0);
         cameraData.set(view, 16);
         device.queue.writeBuffer(cameraBuffer, 0, cameraData as Float32Array<ArrayBuffer>);
-
-        const bindGroupLayout : GPUBindGroupLayout = renderPipeline?.getBindGroupLayout(0);
-        bindGroup = device.createBindGroup({
-            layout: bindGroupLayout,
-            entries:[{
-                binding:0,
-                resource:{
-                    buffer:aspectBuffer
+        if (renderPipeline){
+            bindGroupLayout  = renderPipeline?.getBindGroupLayout(0);
+                if (bindGroupLayout) {
+            
+            bindGroup = device.createBindGroup({
+                layout: bindGroupLayout,
+                entries:[{
+                    binding:0,
+                    resource:{
+                        buffer:aspectBuffer
+                    },
                 },
-            },
-            {
-                binding:1,
-                resource:{
-                    buffer:cameraBuffer
+                {
+                    binding:1,
+                    resource:{
+                        buffer:cameraBuffer
+                    },
                 },
-            },
-        ],    
-    });
-
+            ],    
+        });
+    }
+}
 
         computeBindGroupA = device.createBindGroup({
             layout: computeBindGroupLayout,
@@ -449,13 +497,46 @@ time: ${time.toFixed(1)}s
         }
         aspectData[1] = time;
         device.queue.writeBuffer(aspectBuffer, 0, aspectData);
+const cosPitch = Math.cos(pitch);
+const sinPitch = Math.sin(pitch);
+const cosYaw = Math.cos(yaw);
+const sinYaw = Math.sin(yaw);
 
-        const radius = 3;
-        const height = 1.5;  
-        let eye: [number, number, number] =  [Math.sin(time) * radius,  height, Math.cos(time) * radius,]
-        let target: [number, number, number] = [0, 0, 0];
-        let worldUp: [number, number, number] = [0, 1, 0];
-        let view = Camera.lookAt(eye,target,worldUp);
+const frontDirection = [
+    cosPitch * cosYaw, // X
+    sinPitch,          // Y
+    cosPitch * sinYaw  // Z
+];
+
+// 2. Update cameraTarget relative to the camera's current position (cameraEye)
+cameraTarget = [
+    cameraEye[0] + frontDirection[0],
+    cameraEye[1] + frontDirection[1],
+    cameraEye[2] + frontDirection[2]
+];
+
+if (keysPressed['w'] || keysPressed['arrowup']) {
+    const result = Camera.moveCamera("forward", cameraEye, cameraTarget, cameraWorldUp, cameraSpeed * dt);
+    cameraEye = result.eye;
+    cameraTarget = result.target;
+}
+if (keysPressed['s'] || keysPressed['arrowdown']) {
+    const result = Camera.moveCamera("backward", cameraEye, cameraTarget, cameraWorldUp, cameraSpeed * dt);
+    cameraEye = result.eye;
+    cameraTarget = result.target;
+}
+if (keysPressed['a'] || keysPressed['arrowleft']) {
+    const result = Camera.moveCamera("left", cameraEye, cameraTarget, cameraWorldUp, cameraSpeed * dt);
+    cameraEye = result.eye;
+    cameraTarget = result.target;
+}
+if (keysPressed['d'] || keysPressed['arrowright']) {
+    const result = Camera.moveCamera("right", cameraEye, cameraTarget, cameraWorldUp, cameraSpeed * dt);
+    cameraEye = result.eye;
+    cameraTarget = result.target;
+}
+
+        let view = Camera.lookAt(cameraEye,cameraTarget,cameraWorldUp);
         cameraData.set(proj, 0);
         cameraData.set(view, 16);
         device.queue.writeBuffer(cameraBuffer, 0, cameraData as Float32Array<ArrayBuffer>);
@@ -484,13 +565,16 @@ time: ${time.toFixed(1)}s
             colorAttachments:[colorAttachment]
         };
 
-        const isEven : boolean = (frameCount % 2) === 0; // 2%2 = 0, 1%2 = 1
-        const activeComputeBindGroup = (isEven)
+
+        const isEven = (num: number) => num % 2 === 0;
+        const frameIsEven = isEven(frameCount);
+        const activeComputeBindGroup = (frameIsEven)
             ? computeBindGroupA : computeBindGroupB;
 
-        const renderBuffer = (isEven) ? particleBufferB : particleBufferA;
+        const renderBuffer = (frameIsEven) ? particleBufferB : particleBufferA;
         
-
+// In frame(), add:
+console.log(`Frame ${frameCount}: frameIsEven=${frameIsEven}, renderBuffer=${frameIsEven ? 'B' : 'A'}`);
         // render pass 
 
         const computePass = commandEncoder.beginComputePass();

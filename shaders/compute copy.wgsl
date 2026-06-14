@@ -1,18 +1,16 @@
 struct Particle {
     position: vec4<f32>,
+    scale: vec2<f32>,
+    color: vec4<f32>,
     velocity: vec4<f32>,
-
-    color:    vec4<f32>,
-    scale:    vec2<f32>,
-
-    life:     f32,
-    gravity:  f32,
-    pad:      vec4<f32>,
+    life: f32,
+    gravity: f32,
+    pad: vec4<f32>,
 }
 
-struct Params {
-    dt:         f32,
-    grid_width: u32,
+struct Params{
+    dt:f32,
+    grid_width:u32
 }
 
 @group(0) @binding(0) var<storage, read_write> output_particles: array<Particle>;//another one

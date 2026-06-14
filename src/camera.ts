@@ -57,3 +57,85 @@ export function lookAt(eye : [number,number,number],  target: [number,number,num
     ]);
 
 }
+
+export function moveCamera(
+    direction: "forward" | "backward" | "left" | "right",
+    eye: [number, number, number],
+    target: [number, number, number],
+    worldUp: [number, number, number] = [0, 1, 0],
+    speed: number = 0.1
+): { eye: [number, number, number]; target: [number, number, number] } {
+    
+    // Calculate forward vector (target - eye)
+    const forward: [number, number, number] = [
+        target[0] - eye[0],
+        target[1] - eye[1],
+        target[2] - eye[2],
+    ];
+    
+    // Normalize forward
+    const fLen = Math.sqrt(forward[0]**2 + forward[1]**2 + forward[2]**2);
+    const fNorm: [number, number, number] = [
+        forward[0] / fLen,
+        forward[1] / fLen,
+        forward[2] / fLen,
+    ];
+    
+    // Calculate right vector (forward × worldUp)
+    const right: [number, number, number] = [
+        fNorm[1] * worldUp[2] - fNorm[2] * worldUp[1],
+        fNorm[2] * worldUp[0] - fNorm[0] * worldUp[2],
+        fNorm[0] * worldUp[1] - fNorm[1] * worldUp[0],
+    ];
+    
+    // Normalize right
+    const rLen = Math.sqrt(right[0]**2 + right[1]**2 + right[2]**2);
+    const rNorm: [number, number, number] = [
+        right[0] / rLen,
+        right[1] / rLen,
+        right[2] / rLen,
+    ];
+    
+    let newEye: [number, number, number] = [...eye];
+    let newTarget: [number, number, number] = [...target];
+    
+    switch (direction) {
+        case "forward":
+            newEye[0] += fNorm[0] * speed;
+            newEye[1] += fNorm[1] * speed;
+            newEye[2] += fNorm[2] * speed;
+            newTarget[0] += fNorm[0] * speed;
+            newTarget[1] += fNorm[1] * speed;
+            newTarget[2] += fNorm[2] * speed;
+            break;
+            
+        case "backward":
+            newEye[0] -= fNorm[0] * speed;
+            newEye[1] -= fNorm[1] * speed;
+            newEye[2] -= fNorm[2] * speed;
+            newTarget[0] -= fNorm[0] * speed;
+            newTarget[1] -= fNorm[1] * speed;
+            newTarget[2] -= fNorm[2] * speed;
+            break;
+            
+        case "left":
+            newEye[0] -= rNorm[0] * speed;
+            newEye[1] -= rNorm[1] * speed;
+            newEye[2] -= rNorm[2] * speed;
+            newTarget[0] -= rNorm[0] * speed;
+            newTarget[1] -= rNorm[1] * speed;
+            newTarget[2] -= rNorm[2] * speed;
+            break;
+            
+        case "right":
+            newEye[0] += rNorm[0] * speed;
+            newEye[1] += rNorm[1] * speed;
+            newEye[2] += rNorm[2] * speed;
+            newTarget[0] += rNorm[0] * speed;
+            newTarget[1] += rNorm[1] * speed;
+            newTarget[2] += rNorm[2] * speed;
+            break;
+    }
+    
+    return { eye: newEye, target: newTarget };
+}
