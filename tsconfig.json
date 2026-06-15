@@ -10,6 +10,6 @@
     "types": ["@webgpu/types"],
     "lib": ["ES2020", "DOM"]              
   },
-  "include": ["src/*.ts"],
+  "include": ["src/*.ts", "shaders/*.wgsl", "src/*.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

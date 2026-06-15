@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "keywords": [],
   "author": "",
@@ -12,7 +15,7 @@
   "devDependencies": {
     "@types/gl-matrix": "^2.4.5",
     "@webgpu/types": "^0.1.68",
-    "vite": "^7.3.0"
+    "vite": "^8.0.16"
   },
   "dependencies": {
     "gl-matrix": "^3.4.4",

@@ -138,4 +138,5 @@ export function moveCamera(
     }
     
     return { eye: newEye, target: newTarget };
-}
+
+};

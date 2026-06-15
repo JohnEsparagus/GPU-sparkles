@@ -1,6 +1,8 @@
 import * as Tools from "./tools";
 import * as Camera from "./camera";
 import { mat4 } from 'wgpu-matrix';
+import computeShaderCode from '/shaders/compute.wgsl?raw';
+import vertexShaderCode from '/shaders/vert.wgsl?raw';
 
 const INITIAL_LIFE = 2;
 
@@ -256,9 +258,8 @@ class Renderer {
         ],
         });
 
-            const computeShadername = await fetch("./shaders/compute.wgsl").then(r=>r.text());
         const computeShaderModule  : GPUShaderModule = device.createShaderModule({
-            code: computeShadername
+            code: computeShaderCode
         });
         if (computeShaderModule){
             console.log("ShaderComputeModule successful initialisation");
@@ -318,9 +319,8 @@ class Renderer {
             },//rest is padded to 80 autoamatically
         ],
         },];
-        const shadername = await fetch("./shaders/vert.wgsl").then(r=>r.text());
         const shaderModule  : GPUShaderModule = device.createShaderModule({
-            code: shadername
+            code: vertexShaderCode
         });
         if (shaderModule){
             console.log("ShaderModule successful initialisation");
@@ -477,7 +477,6 @@ class Renderer {
         let avgfps = frameTimes.reduce((a,b)=> a+b) / frameTimes.length; 
         
         if (time - lastReportTime > 1){
-        console.log(`fps: ${(1 / avgfps).toFixed(0)}`);
         lastReportTime = time
         }
 
@@ -574,7 +573,6 @@ if (keysPressed['d'] || keysPressed['arrowright']) {
         const renderBuffer = (frameIsEven) ? particleBufferB : particleBufferA;
         
 // In frame(), add:
-console.log(`Frame ${frameCount}: frameIsEven=${frameIsEven}, renderBuffer=${frameIsEven ? 'B' : 'A'}`);
         // render pass 
 
         const computePass = commandEncoder.beginComputePass();
